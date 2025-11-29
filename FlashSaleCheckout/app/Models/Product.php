@@ -6,5 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
-    //
+    protected $fillable = ['name', 'price', 'quantity'];
+    
+    public function holds()
+    {
+        return $this->hasMany(Hold::class);
+    }
 }
