@@ -4,24 +4,21 @@ namespace App\Http\Controllers;
 
 use App\Models\Product; 
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
-
 
 class ProductController extends Controller
 {
-        public function show($id)
+    public function show($id)
     {
 
-      $product = Product::findOrFail($id);
+        $product = Product::with(['holds' => function ($query) {
+            $query->where('expires_at', '>', now());
+        }])->findOrFail($id);
 
-        $availableStock = Cache::remember("product_{$id}_stock", 5, function () use ($product) {
-            $stock = $product->quantity - $product->holds()
-                ->where('expires_at', '>', now())
-                ->sum('quantity');
+        $cacheKey = "product_{$id}_stock";
+        $ttlSeconds = 5;
 
-            Log::info("Calculated stock for product {$product->id}: {$stock}");
-
-            return $stock;
+        $availableStock = Cache::remember($cacheKey, $ttlSeconds, function () use ($product) {
+            return $product->quantity - $product->holds->sum('quantity');
         });
 
         return response()->json([
