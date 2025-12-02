@@ -15,10 +15,10 @@ class ReleaseExpiredHolds extends Command
     public function handle(): void
     {
         Hold::where('expires_at', '<', now())
+            ->whereDoesntHave('order')
             ->chunk(100, function ($expiredHolds) {
                 DB::transaction(function () use ($expiredHolds) {
-                    foreach ($expiredHolds as $hold) 
-                    {
+                    foreach ($expiredHolds as $hold) {
                         Cache::forget("product_{$hold->product_id}_stock");
                         $hold->delete();
                     }

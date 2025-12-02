@@ -4,14 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Hold;
-use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 
 class OrderController extends Controller
 {
-
     public function order(Request $request)
     {
         $request->validate([
@@ -40,13 +38,24 @@ class OrderController extends Controller
                     throw new \Exception('Hold has already been used');
                 }
 
+                $activeHoldsQty = $hold->product->holds()
+                    ->where('expires_at', '>', now()) 
+                    ->whereDoesntHave('order')  
+                    ->sum('quantity');
+
+                $availableStock = $hold->product->quantity - $activeHoldsQty;
+
+                if ($availableStock < 1) 
+                {
+                    throw new \Exception('No available stock left for the product');
+                }
+
                 $order = Order::create([
                     'hold_id' => $hold->id,
                     'status' => Order::STATUS_PENDING,
                 ]);
 
-                $productId = $hold->product_id;
-                Cache::forget("product_{$productId}_stock");
+                Cache::forget("product_{$hold->product_id}_stock");
 
                 return $order;
             });
