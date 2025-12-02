@@ -2,9 +2,65 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Order;
+use App\Models\Hold;
+use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class OrderController extends Controller
 {
-    //
+
+    public function order(Request $request)
+    {
+        $request->validate([
+            'hold_id' => 'required|exists:holds,id',
+        ]);
+
+        $holdId = $request->hold_id;
+
+        try {
+            $order = DB::transaction(function () use ($holdId) {
+
+                $hold = Hold::lockForUpdate()->with('order', 'product')->find($holdId);
+
+                if (!$hold) 
+                {
+                    throw new \Exception('Hold not found');
+                }
+
+                if ($hold->expires_at <= now()) 
+                {
+                    throw new \Exception('Hold has expired');
+                }
+
+                if ($hold->order) 
+                {
+                    throw new \Exception('Hold has already been used');
+                }
+
+                $order = Order::create([
+                    'hold_id' => $hold->id,
+                    'status' => Order::STATUS_PENDING,
+                ]);
+
+                $productId = $hold->product_id;
+                Cache::forget("product_{$productId}_stock");
+
+                return $order;
+            });
+
+            return response()->json([
+                'order_id' => $order->id,
+                'hold_id' => $order->hold_id,
+                'status' => $order->status,
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
 }

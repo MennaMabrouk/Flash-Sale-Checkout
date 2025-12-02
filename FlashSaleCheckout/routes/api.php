@@ -4,9 +4,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\HoldController;
-
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PaymentController;
 
 Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::post('/holds', [HoldController::class, 'store']);
-Route::post('/orders/{hold_id}', [HoldController::class, 'order']);
-Route::post('/payments/webhook', [HoldController::class, 'pay']);
+Route::post('/orders', [OrderController::class, 'order']);
+Route::post('/payments/webhook', [PaymentController::class, 'pay']);
