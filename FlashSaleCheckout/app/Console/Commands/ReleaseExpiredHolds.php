@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use App\Models\Hold;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+
+class ReleaseExpiredHolds extends Command
+{
+    protected $signature = 'holds:release-expired';
+    protected $description = 'Release expired holds and update stock cache';
+
+    public function handle(): void
+    {
+        Hold::where('expires_at', '<', now())
+            ->chunk(100, function ($expiredHolds) {
+                DB::transaction(function () use ($expiredHolds) {
+                    foreach ($expiredHolds as $hold) 
+                    {
+                        Cache::forget("product_{$hold->product_id}_stock");
+                        $hold->delete();
+                    }
+                });
+
+                $this->info("Released {$expiredHolds->count()} expired holds in this chunk");
+            });
+    }
+}
