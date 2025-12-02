@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+
 
 class Hold extends Model
 {
@@ -18,4 +20,6 @@ class Hold extends Model
     {
         return $this->hasOne(Order::class);
     }
+    
+    use HasFactory;
 }

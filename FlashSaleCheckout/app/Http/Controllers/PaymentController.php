@@ -8,11 +8,16 @@ use Illuminate\Support\Facades\Cache;
 use App\Models\Order;
 use App\Models\Hold;
 use App\Models\PaymentWebhook;
+use App\Models\Product;
 
 class PaymentController extends Controller
 {
+    /**
+     * Process a payment webhook
+     */
     public function pay(Request $request)
     {
+        // Validate incoming request
         $request->validate([
             'idempotency_key' => 'required|string',
             'order_id' => 'required|exists:orders,id',
@@ -26,24 +31,34 @@ class PaymentController extends Controller
         try {
             $result = DB::transaction(function () use ($idempotencyKey, $orderId, $paymentStatus) {
 
-                $existing = PaymentWebhook::where('idempotency_key', $idempotencyKey)->first();
-                if ($existing) 
+                $existingWebhook = PaymentWebhook::where('idempotency_key', $idempotencyKey)->first();
+                if ($existingWebhook) 
                 {
-                    return $existing;
+                    return $existingWebhook;
                 }
 
-                $order = Order::lockForUpdate()->with('hold')->findOrFail($orderId);
+                $order = Order::with('hold')->lockForUpdate()->findOrFail($orderId);
+                $hold = $order->hold;
+
+                if (!$hold) 
+                {
+                    throw new \Exception("Order hold not found");
+                }
+
+                $product = Product::lockForUpdate()->findOrFail($hold->product_id);
 
                 if ($paymentStatus === 'success') 
                 {
                     $order->status = Order::STATUS_PAID;
-                    $order->hold->product->decrement('quantity', $order->hold->quantity);
+                    $product->decrement('quantity', $hold->quantity);
                 } 
                 else 
                 {
                     $order->status = Order::STATUS_CANCELLED;
-                    $order->hold->delete();
+
+                    $hold->delete();
                 }
+
                 $order->save();
 
                 $webhook = PaymentWebhook::create([
@@ -52,19 +67,20 @@ class PaymentController extends Controller
                     'status' => $paymentStatus,
                 ]);
 
-                Cache::forget("product_{$order->hold->product_id}_stock");
+                Cache::forget("product_{$product->id}_stock");
 
                 return $webhook;
             });
 
             return response()->json([
-                'message' => 'Webhook processed',
+                'message' => 'Webhook processed successfully',
                 'data' => $result
             ], 200);
 
         } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return response()->json([
+                'message' => $e->getMessage()
+            ], 400);
         }
     }
 }
-
